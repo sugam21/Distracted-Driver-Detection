@@ -1,19 +1,20 @@
-from typing import Tuple
-from pandas.io.sql import get_option
+from test import test_loop
+
+import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import pandas as pd
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
+
+# For weights visualization
 from tqdm import tqdm
 
 # custom files
 import config
-from network import Network
-import utils
 from dataset import CustomDataset, DataTransform
-
+from network import Network
+from utils import load_checkpoint, save_checkpoint
 
 code_class_mapping = {
     "c0": "Safe driving",
@@ -58,7 +59,7 @@ def get_train_valid_in_image(train_set, valid_set):
     return training_data, validation_data
 
 
-def train_loop(dataloader, model, loss_fn, optimizer):
+def train_loop(dataloader, model, loss_fn, optimizer) -> None:
     size = len(dataloader.dataset)
     # set the model to training mode - imp for batch norm and dropout layers
     model.train()
@@ -72,43 +73,17 @@ def train_loop(dataloader, model, loss_fn, optimizer):
         # compute the prediction
         prediction = model(image_batch)
         loss = loss_fn(prediction, labels)
+
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
 
         if batch % 100 == 0:
             loss, current = loss.item(), batch * config.BATCH_SIZE + len(image_batch)
-            print(f"Loss: {loss:>7f} | [{current:>5d}/{size:>5d}] ")
+            print(f"Training Loss: {loss:>7f} | [{current:>5d}/{size:>5d}] ")
 
 
-def test_loop(dataloader, model, loss_fn):
-    # set the model to eval mode - imp for batch norma and dropout
-    model.eval()
-    size = len(dataloader.dataset)
-    num_batches = len(dataloader)
-    test_loss, correct = 0, 0
-
-    # evaluate the model with torch.no_grad() ensures that no gradients are
-    # computed during test mode
-    # also reduce unnecessary gradients computations and memory usage for
-    # tensors with requires_grad = True
-    with torch.no_grad():
-        for image_batch, labels in dataloader:
-            (image_batch, labels) = (
-                image_batch.to(config.DEVICE),
-                labels.to(config.DEVICE),
-            )
-            pred = model(image_batch)
-            test_loss += loss_fn(pred, labels).item()
-            correct += (pred.argmax(1) == labels).type(torch.float).sum().item()
-    test_loss /= num_batches
-    correct /= size
-    print(
-        f"Test Error : \n Accuracy: {100 * correct:0.1f}%, Avg loss: {test_loss:>8f} \n"
-    )
-
-
-def main():
+def main() -> None:
     df = pd.read_csv(config.ANNOTATION_FILE_DIR)
     df["class_code"] = df["classname"].map(lambda x: int(x[-1]))
     df = df[["subject", "classname", "class_code", "img"]]
@@ -120,18 +95,43 @@ def main():
     training_data, validation_data = get_train_valid_in_image(train_set, valid_set)
 
     train_dataloader = DataLoader(
-        training_data, batch_size=config.BATCH_SIZE, shuffle=True
+        training_data,
+        batch_size=config.BATCH_SIZE,
+        shuffle=True,
     )
     valid_dataloader = DataLoader(
-        validation_data, batch_size=config.BATCH_SIZE, shuffle=True
+        validation_data,
+        batch_size=config.BATCH_SIZE,
+        shuffle=True,
     )
 
     model = Network().to(config.DEVICE)
     loss_fn = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=config.LEARNING_RATE)
+
+    # if load pre-trained model is true
+    if config.LOAD_MODEL:
+        load_checkpoint(
+            checkpoint_file=config.CHECKPOINT_FILENAME_CUSTOM_NETWORK,
+            filepath=config.CHECKPOINT_SAVE_DIR,
+            model=model,
+            optimizer=optimizer,
+            lr=config.LEARNING_RATE,
+        )
+
     for epoch in range(config.NUM_EPOCHS):
-        print(f"Epoch: {epoch+1}\n -----------------------------------")
+        print(f"EPOCH: {epoch+1}\n -----------------------------------")
         train_loop(train_dataloader, model, loss_fn, optimizer)
+
+        # save checkpoint during training
+        if config.SAVE_MODEL:
+            save_checkpoint(
+                model=model,
+                optimizer=optimizer,
+                filepath=config.CHECKPOINT_SAVE_DIR,
+                filename=config.CHECKPOINT_FILENAME_CUSTOM_NETWORK,
+            )
+
         test_loop(valid_dataloader, model, loss_fn)
     print("Done!")
 
