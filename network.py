@@ -16,6 +16,7 @@ class ConvBlock(nn.Module):
                 padding_mode="reflect",
             ),
             nn.LeakyReLU(0.2, inplace=True),
+            nn.BatchNorm2d(out_channel),
             nn.AvgPool2d(kernel_size=(3, 3), stride=2, padding=1),
         )
 
@@ -36,6 +37,7 @@ class BlockWithoutPooling(nn.Module):
                 padding_mode="reflect",
             ),
             nn.LeakyReLU(0.2, inplace=True),
+            nn.BatchNorm2d(out_channel),
         )
 
     def forward(self, x) -> Tensor:

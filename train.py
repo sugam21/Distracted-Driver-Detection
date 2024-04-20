@@ -1,8 +1,10 @@
 from test import test_loop
 
 import pandas as pd
-import torch
+
+# import torch
 import torch.nn as nn
+import torch
 import torch.optim as optim
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
@@ -31,6 +33,14 @@ code_class_mapping = {
 
 
 def get_train_valid_in_csv(df):
+    """
+    Takes the data frame file for the information about dataset and seperate training and testing parat
+    Params:
+      df (pd.DataFrame): DataFrame containing the information about entire dataset
+    Returns:
+      Tuple(pd.DataFrame,pd.DataFrame): Tuple containing training and testing set
+    """
+
     # Seperating train and validation sets
     train_set, valid_set = train_test_split(
         df, shuffle=True, random_state=config.SEED, stratify=df["classname"]
@@ -60,7 +70,9 @@ def get_train_valid_in_image(train_set, valid_set):
 
 
 def train_loop(dataloader, model, loss_fn, optimizer) -> None:
-    size = len(dataloader.dataset)
+    # size = len(dataloader.dataset)
+    running_loss = 0
+    train_correct = 0
     # set the model to training mode - imp for batch norm and dropout layers
     model.train()
     for batch, (image_batch, labels) in tqdm(
@@ -77,13 +89,21 @@ def train_loop(dataloader, model, loss_fn, optimizer) -> None:
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
+        running_loss += loss.item()
+        train_correct += (prediction.argmax(1) == labels).type(torch.float).sum().item()
 
         if batch % 100 == 0:
-            loss, current = loss.item(), batch * config.BATCH_SIZE + len(image_batch)
-            print(f"Training Loss: {loss:>7f} | [{current:>5d}/{size:>5d}] ")
+            # loss, current = loss.item(), batch * config.BATCH_SIZE + len(image_batch)
+            print(
+                f"Batch{batch+1:5d} loss:{running_loss/100:.3f}"
+            )  # since i am adding loss for every 100 bath, so i need to display average loss for each batch
+            # print(f"Training Loss: {loss:>7f} | [{current:>5d}/{size:>5d}] ")
+            running_loss = 0.0
+    training_accuracy = 100 * train_correct / len(dataloader.dataset)
+    print(f"The training Accuracy is : {training_accuracy}")
 
 
-def main() -> None:
+def main(is_load: bool, is_save: bool) -> None:
     df = pd.read_csv(config.ANNOTATION_FILE_DIR)
     df["class_code"] = df["classname"].map(lambda x: int(x[-1]))
     df = df[["subject", "classname", "class_code", "img"]]
@@ -110,7 +130,7 @@ def main() -> None:
     optimizer = optim.Adam(model.parameters(), lr=config.LEARNING_RATE)
 
     # if load pre-trained model is true
-    if config.LOAD_MODEL:
+    if is_load:
         load_checkpoint(
             checkpoint_file=config.CHECKPOINT_FILENAME_CUSTOM_NETWORK,
             filepath=config.CHECKPOINT_SAVE_DIR,
@@ -124,17 +144,16 @@ def main() -> None:
         train_loop(train_dataloader, model, loss_fn, optimizer)
 
         # save checkpoint during training
-        if config.SAVE_MODEL:
+        if is_save:
             save_checkpoint(
                 model=model,
                 optimizer=optimizer,
                 filepath=config.CHECKPOINT_SAVE_DIR,
                 filename=config.CHECKPOINT_FILENAME_CUSTOM_NETWORK,
             )
-
         test_loop(valid_dataloader, model, loss_fn)
     print("Done!")
 
 
 if __name__ == "__main__":
-    main()
+    main(is_load=True, is_save=True)

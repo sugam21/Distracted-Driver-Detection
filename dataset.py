@@ -1,13 +1,8 @@
-# import numpy as np
-# from PIL import Image
-import pandas as pd
-from typing import List
-from typing import Optional
-from typing import Callable
 from torchvision.transforms import v2
 from torchvision.io import read_image
 import os
 import torch
+from torch import Tensor
 from torch.utils.data import Dataset
 
 
@@ -18,16 +13,15 @@ class DataTransform:
                 [
                     v2.RandomResizedCrop(size=(input_size, input_size), antialias=True),
                     v2.RandomHorizontalFlip(p=0.5),
-                    v2.RandomVerticalFlip(p=0.5),
                     v2.ToDtype(torch.float32, scale=True),
                     v2.Normalize(mean=channel_mean, std=channel_std),
                 ]
             ),
             "valid": v2.Compose(
                 [
-                    v2.RandomResizedCrop(size=(input_size, input_size), antialias=True),
-                    v2.ToDtype(torch.float32, scale=True),
+                    v2.Resize(size=(input_size, input_size)),
                     v2.Normalize(mean=channel_mean, std=channel_std),
+                    v2.ToDtype(torch.float32, scale=True),
                 ]
             ),
         }
@@ -63,7 +57,7 @@ class CustomDataset(Dataset):
             self.img_labels.iloc[idx, -1],
         )  # gets the indexed image
 
-        image: Tensor = read_image(img_path)  # converts the image into tensor
+        image: Tensor = read_image(img_path).float()  # converts the image into tensor
         label: int = self.img_labels.iloc[idx, 2]  # gets the label of the image
         if self.transform:
             image = self.transform(image, self.is_train)

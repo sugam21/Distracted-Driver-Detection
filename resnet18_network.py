@@ -19,6 +19,9 @@ class Resnet18(nn.Module):
     def forward(self, x):
         return self.resnet(x)
 
+    def compute_l1_loss(self, w):
+        return torch.abs(w).sum()
+
 
 if __name__ == "__main__":
     x = torch.randn(1, 3, 224, 224)

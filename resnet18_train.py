@@ -50,6 +50,10 @@ def get_train_valid_in_image(train_set, valid_set):
     return training_data, validation_data
 
 
+def compute_l1_loss(w):
+    return torch.abs(w).sum()
+
+
 def train_loop(dataloader, model, loss_fn, optimizer) -> None:
     # size = len(dataloader.dataset)
     running_loss = 0
@@ -68,6 +72,16 @@ def train_loop(dataloader, model, loss_fn, optimizer) -> None:
         # compute the prediction
         prediction = model(image_batch)
         loss = loss_fn(prediction, labels)
+
+        # # Compute l1 loss component
+        # l1_weight = 0.3
+        # l1_parameters = []
+        # for parameter in model.parameters():
+        #     l1_parameters.append(parameter.view(-1))
+        # l1 = l1_weight * compute_l1_loss(torch.cat(l1_parameters))
+        #
+        # # Add L1 loss component
+        # loss += l1
 
         loss.backward()
         optimizer.step()
