@@ -5,12 +5,14 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.model_selection import train_test_split
 from torch.utils.data import DataLoader
+from typing import Tuple
 
 # For weights visualization
 from tqdm import tqdm
 
 # custom files
 import config
+import utils
 from dataset import CustomDataset, DataTransform
 from resnet18_network import Resnet18
 from utils import load_checkpoint, save_checkpoint
@@ -54,7 +56,7 @@ def compute_l1_loss(w):
     return torch.abs(w).sum()
 
 
-def train_loop(dataloader, model, loss_fn, optimizer) -> None:
+def train_loop(dataloader, model, loss_fn, optimizer) -> Tuple[float, float]:
     # size = len(dataloader.dataset)
     running_loss = 0
     total_loss = 0
@@ -72,17 +74,6 @@ def train_loop(dataloader, model, loss_fn, optimizer) -> None:
         # compute the prediction
         prediction = model(image_batch)
         loss = loss_fn(prediction, labels)
-
-        # # Compute l1 loss component
-        # l1_weight = 0.3
-        # l1_parameters = []
-        # for parameter in model.parameters():
-        #     l1_parameters.append(parameter.view(-1))
-        # l1 = l1_weight * compute_l1_loss(torch.cat(l1_parameters))
-        #
-        # # Add L1 loss component
-        # loss += l1
-
         loss.backward()
         optimizer.step()
         optimizer.zero_grad()
@@ -97,6 +88,7 @@ def train_loop(dataloader, model, loss_fn, optimizer) -> None:
     training_accuracy = 100 * train_correct / len(dataloader.dataset)
     print("Training Result:")
     print(f"Accuracy: {training_accuracy:.2f}%, Avg Loss: {total_loss/num_batches}")
+    return training_accuracy, total_loss / num_batches
 
 
 def main(is_load: bool, is_save: bool) -> None:
@@ -134,10 +126,14 @@ def main(is_load: bool, is_save: bool) -> None:
             optimizer=optimizer,
             lr=config.LEARNING_RATE,
         )
+    # Creataing folder to store log files
+    log_folder_path = utils.create_log_folder()
 
     for epoch in range(config.NUM_EPOCHS):
         print(f"EPOCH: {epoch+1}\n -----------------------------------")
-        train_loop(train_dataloader, model, loss_fn, optimizer)
+        training_accuracy, training_loss = train_loop(
+            train_dataloader, model, loss_fn, optimizer
+        )
 
         # save checkpoint during training
         if is_save:
@@ -148,7 +144,17 @@ def main(is_load: bool, is_save: bool) -> None:
                 filename=config.CHECKPOINT_FILENAME_RESNET_NETWORK,
             )
 
-        test_loop(valid_dataloader, model, loss_fn)
+        validation_accuracy, validation_loss = test_loop(
+            valid_dataloader, model, loss_fn
+        )
+        utils.save_result(
+            epoch,
+            training_accuracy,
+            validation_accuracy,
+            training_loss,
+            validation_loss,
+            log_folder_path,
+        )
     print("Done!")
 
 

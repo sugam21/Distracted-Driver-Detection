@@ -1,21 +1,19 @@
 from test import test_loop
-
-import pandas as pd
-
-# import torch
-import torch.nn as nn
-import torch
-import torch.optim as optim
-from sklearn.model_selection import train_test_split
-from torch.utils.data import DataLoader
-
-# For weights visualization
-from tqdm import tqdm
+from resnet18_train import train_loop
 
 # custom files
 import config
+import pandas as pd
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import utils
 from dataset import CustomDataset, DataTransform
 from network import Network
+from sklearn.model_selection import train_test_split
+from torch.utils.data import DataLoader
+# For weights visualization
+from tqdm import tqdm
 from utils import load_checkpoint, save_checkpoint
 
 code_class_mapping = {
@@ -69,40 +67,6 @@ def get_train_valid_in_image(train_set, valid_set):
     return training_data, validation_data
 
 
-def train_loop(dataloader, model, loss_fn, optimizer) -> None:
-    # size = len(dataloader.dataset)
-    running_loss = 0
-    train_correct = 0
-    # set the model to training mode - imp for batch norm and dropout layers
-    model.train()
-    for batch, (image_batch, labels) in tqdm(
-        enumerate(dataloader), unit="batch", total=len(dataloader)
-    ):
-        (image_batch, labels) = (
-            image_batch.to(config.DEVICE),
-            labels.to(config.DEVICE),
-        )
-        # compute the prediction
-        prediction = model(image_batch)
-        loss = loss_fn(prediction, labels)
-
-        loss.backward()
-        optimizer.step()
-        optimizer.zero_grad()
-        running_loss += loss.item()
-        train_correct += (prediction.argmax(1) == labels).type(torch.float).sum().item()
-
-        if batch % 100 == 0:
-            # loss, current = loss.item(), batch * config.BATCH_SIZE + len(image_batch)
-            print(
-                f"Batch{batch+1:5d} loss:{running_loss/100:.3f}"
-            )  # since i am adding loss for every 100 bath, so i need to display average loss for each batch
-            # print(f"Training Loss: {loss:>7f} | [{current:>5d}/{size:>5d}] ")
-            running_loss = 0.0
-    training_accuracy = 100 * train_correct / len(dataloader.dataset)
-    print(f"The training Accuracy is : {training_accuracy}")
-
-
 def main(is_load: bool, is_save: bool) -> None:
     df = pd.read_csv(config.ANNOTATION_FILE_DIR)
     df["class_code"] = df["classname"].map(lambda x: int(x[-1]))
@@ -138,10 +102,14 @@ def main(is_load: bool, is_save: bool) -> None:
             optimizer=optimizer,
             lr=config.LEARNING_RATE,
         )
+    # Creataing folder to store log files
+    log_folder_path = utils.create_log_folder()
 
     for epoch in range(config.NUM_EPOCHS):
         print(f"EPOCH: {epoch+1}\n -----------------------------------")
-        train_loop(train_dataloader, model, loss_fn, optimizer)
+        training_accuracy: float = train_loop(
+            train_dataloader, model, loss_fn, optimizer
+        )
 
         # save checkpoint during training
         if is_save:
@@ -151,7 +119,10 @@ def main(is_load: bool, is_save: bool) -> None:
                 filepath=config.CHECKPOINT_SAVE_DIR,
                 filename=config.CHECKPOINT_FILENAME_CUSTOM_NETWORK,
             )
-        test_loop(valid_dataloader, model, loss_fn)
+        validation_accuracy: float = test_loop(valid_dataloader, model, loss_fn)
+        utils.save_result(
+            epoch, training_accuracy, validation_accuracy, log_folder_path
+        )
     print("Done!")
 
 

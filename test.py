@@ -1,8 +1,9 @@
 import config
 import torch
+from typing import Tuple
 
 
-def test_loop(dataloader, model, loss_fn):
+def test_loop(dataloader, model, loss_fn) -> Tuple[float, float]:
     """
     Evaluates the model on the provided dataloader.
     Args:
@@ -32,3 +33,4 @@ def test_loop(dataloader, model, loss_fn):
     print(
         f"Validation Result: \n Accuracy: {validation_accuracy:.2f}%, Avg loss: {validation_loss:.2f}"
     )
+    return validation_accuracy, validation_loss

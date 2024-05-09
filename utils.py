@@ -1,8 +1,10 @@
-import random
-import torch
 import os
-import numpy as np
+import random
+from datetime import datetime
+
 import config
+import numpy as np
+import torch
 
 
 def save_checkpoint(
@@ -40,6 +42,7 @@ def load_checkpoint(
     Takes mode, optimizer and complete path of the folder as well as file name and loads the saved model in the passed model parameter
     params:
       model (torch model): It is pytorch model to which you want to insert pretrained parameters
+
       optimizer (torch optimizer): It is a pytorch optimizer to which you want to add pretrained gradients
       filepath(str): It is the path of the directory from where you wish to access your saved checkpoint.
                      It is taken from  CHECKPOINT_SAVE_DIR = "/content/drive/MyDrive/Academics/CV/saved_checkpoints" in config.py file
@@ -71,3 +74,45 @@ def seed_everything(seed=config.SEED):
     torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+
+def create_log_folder()->str:
+    """
+    This function creates a folder with current date and time as name to store log files
+    params:
+      None
+    returns:
+      log_folder_path(str): path of the created log folder
+    """
+    current_time = datetime.now()
+    timestamp = current_time.strftime("%Y-%m-%d_%H-%M-%S")
+    log_folder_path = os.path.join(config.LOG_SAVE_DIR, f"{timestamp}")
+    try:
+        os.mkdir(log_folder_path)
+        print(f"Folder with name {log_folder_path} created successfully")
+    except OSError as e:
+        print(f"Failed to create folder {log_folder_path}: {e}")
+    else:
+        with open(log_folder_path + "/log.log", "w") as f:
+            f.write(
+                f"{'Epoch':<8}{'training_accuracy':<20}{'validation_accuracy':<20}"
+                f"{'training_loss':<20}{'validation_loss':<20}"
+                f"{'Time':<20}\n"
+            )
+        return log_folder_path
+
+
+def save_result(
+    epoch: int,
+    training_accuracy: float,
+    validation_accuracy: float,
+    training_loss: float,
+    validation_loss: float,
+    log_folder_path,
+):
+    with open(log_folder_path + "/log.log", "a") as f:
+        f.write(
+            f"{epoch:<8}{training_accuracy:<20}{validation_accuracy:<20}"
+            f"{training_loss:<20}{validation_loss:<20}"
+            f"{datetime.now().strftime('%Y-%m-%dT::%H:%M:%S'):>20}\n"
+        )
